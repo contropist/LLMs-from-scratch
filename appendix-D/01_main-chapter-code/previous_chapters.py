@@ -1,3 +1,8 @@
+# Copyright (c) Sebastian Raschka under Apache License 2.0 (see LICENSE.txt).
+# Source for "Build a Large Language Model From Scratch"
+#   - https://www.manning.com/books/build-a-large-language-model-from-scratch
+# Code: https://github.com/rasbt/LLMs-from-scratch
+
 # This file collects all the relevant code that we covered thus far
 # throughout Chapters 2-4.
 # This file can be run as a standalone script.
@@ -36,7 +41,7 @@ class GPTDatasetV1(Dataset):
         return self.input_ids[idx], self.target_ids[idx]
 
 
-def create_dataloader_v1(txt, batch_size=4, max_length=256, 
+def create_dataloader_v1(txt, batch_size=4, max_length=256,
                          stride=128, shuffle=True, drop_last=True):
     # Initialize the tokenizer
     tokenizer = tiktoken.get_encoding("gpt2")
@@ -80,7 +85,7 @@ class MultiHeadAttention(nn.Module):
 
         # We implicitly split the matrix by adding a `num_heads` dimension
         # Unroll last dim: (b, num_tokens, d_out) -> (b, num_tokens, num_heads, head_dim)
-        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim) 
+        keys = keys.view(b, num_tokens, self.num_heads, self.head_dim)
         values = values.view(b, num_tokens, self.num_heads, self.head_dim)
         queries = queries.view(b, num_tokens, self.num_heads, self.head_dim)
 
@@ -102,7 +107,7 @@ class MultiHeadAttention(nn.Module):
         attn_weights = self.dropout(attn_weights)
 
         # Shape: (b, num_tokens, num_heads, head_dim)
-        context_vec = (attn_weights @ values).transpose(1, 2) 
+        context_vec = (attn_weights @ values).transpose(1, 2)
 
         # Combine heads, where self.d_out = self.num_heads * self.head_dim
         context_vec = context_vec.reshape(b, num_tokens, self.d_out)
@@ -135,7 +140,7 @@ class GELU(nn.Module):
 
     def forward(self, x):
         return 0.5 * x * (1 + torch.tanh(
-            torch.sqrt(torch.tensor(2.0 / torch.pi)) * 
+            torch.sqrt(torch.tensor(2.0 / torch.pi)) *
             (x + 0.044715 * torch.pow(x, 3))
         ))
 
@@ -161,7 +166,7 @@ class TransformerBlock(nn.Module):
             d_in=cfg["emb_dim"],
             d_out=cfg["emb_dim"],
             block_size=cfg["ctx_len"],
-            num_heads=cfg["n_heads"], 
+            num_heads=cfg["n_heads"],
             dropout=cfg["drop_rate"],
             qkv_bias=cfg["qkv_bias"])
         self.ff = FeedForward(cfg)
@@ -227,7 +232,7 @@ def generate_text_simple(model, idx, max_new_tokens, context_size):
 
         # Focus only on the last time step
         # (batch, n_token, vocab_size) becomes (batch, vocab_size)
-        logits = logits[:, -1, :]  
+        logits = logits[:, -1, :]
 
         # Get the idx of the vocab entry with the highest logits value
         idx_next = torch.argmax(logits, dim=-1, keepdim=True)  # (batch, 1)
@@ -245,25 +250,24 @@ def generate_text_simple(model, idx, max_new_tokens, context_size):
 
 def calc_loss_batch(input_batch, target_batch, model, device):
     input_batch, target_batch = input_batch.to(device), target_batch.to(device)
-
     logits = model(input_batch)
-    logits = logits.view(-1, logits.size(-1))
-    loss = torch.nn.functional.cross_entropy(logits, target_batch.view(-1))
+    loss = torch.nn.functional.cross_entropy(logits.flatten(0, 1), target_batch.flatten())
     return loss
 
 
 def calc_loss_loader(data_loader, model, device, num_batches=None):
-    total_loss, batches_seen = 0., 0.
+    total_loss = 0.
     if num_batches is None:
         num_batches = len(data_loader)
+    else:
+        num_batches = min(num_batches, len(data_loader))
     for i, (input_batch, target_batch) in enumerate(data_loader):
         if i < num_batches:
             loss = calc_loss_batch(input_batch, target_batch, model, device)
             total_loss += loss.item()
-            batches_seen += 1
         else:
             break
-    return total_loss / batches_seen
+    return total_loss / num_batches
 
 
 def evaluate_model(model, train_loader, val_loader, device, eval_iter):
@@ -289,7 +293,7 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
 
 
 def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
-    fig, ax1 = plt.subplots()
+    fig, ax1 = plt.subplots(figsize=(5, 3))
 
     # Plot training and validation loss against epochs
     ax1.plot(epochs_seen, train_losses, label="Training loss")
@@ -304,7 +308,7 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     ax2.set_xlabel("Tokens seen")
 
     fig.tight_layout()  # Adjust layout to make room
-    plt.show()
+    # plt.show()
 
 
 def text_to_token_ids(text, tokenizer):
@@ -315,4 +319,4 @@ def text_to_token_ids(text, tokenizer):
 
 def token_ids_to_text(token_ids, tokenizer):
     flat = token_ids.squeeze(0)  # remove batch dimension
-    return tokenizer.decode(flat.tolist())   
+    return tokenizer.decode(flat.tolist())
